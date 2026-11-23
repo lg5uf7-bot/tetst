@@ -134,7 +134,7 @@ def strip_html(raw: str | None) -> str:
 
 
 def make_content_hash(title: str, location: str, department: str, description_text: str) -> str:
-    payload = f"{title.strip()}|{location.strip()}|{department.strip()}|{description_text.strip()}"
+    payload = f"v2|{title.strip()}|{location.strip()}|{department.strip()}|{description_text.strip()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -620,7 +620,9 @@ def parse_breezy(payload: Any) -> list[dict[str, Any]]:
 def parse_bamboohr_item(slug: str, j: dict[str, Any], detail: dict[str, Any] | None = None) -> dict[str, Any] | None:
     ext_id = clean_str(j.get("id"))
     if not ext_id:
-        return None
+        continue_flag = True
+        if continue_flag:
+            return None
     jo = (detail or {}).get("result", {}).get("jobOpening", {}) if isinstance(detail, dict) else {}
     if not isinstance(jo, dict):
         jo = {}
@@ -978,7 +980,7 @@ def main() -> None:
 
         existing_jobs = sb.select_all(
             "jobs",
-            select="id,company_id,ats_provider,external_id,content_hash,status,missing_streak",
+            select="id,company_id,ats_provider,external_id,content_hash,status,missing_streak,first_seen_at",
         )
         existing_map: dict[tuple[str, str, str], dict[str, Any]] = {}
         open_by_company: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -1048,6 +1050,7 @@ def main() -> None:
                             "ats_provider": provider,
                             "status": "open",
                             "missing_streak": 0,
+                            "first_seen_at": prev.get("first_seen_at") or now,
                             "last_seen_at": now,
                             "closed_at": None,
                             "updated_at": now,
