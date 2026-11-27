@@ -63,7 +63,7 @@ async def enrich_yc_pages(yc_records: list[dict], only_hiring: bool = True, limi
     sem = asyncio.Semaphore(35)
     socials_out: dict[str, list[str]] = {}
     founders_out: dict[str, list[dict]] = {}
-    items = [c for c in yc_records if c.get("domain") and (not only_hiring or c.get("is_hiring"))]
+    items = [c for c in yc_records if c.get("domain") and not c.get("nonprofit") and (not only_hiring or c.get("is_hiring"))]
     if limit:
         items = items[:limit]
 

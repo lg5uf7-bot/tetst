@@ -24,7 +24,7 @@ async def backfill_missing_richness() -> None:
     """Backfill founders + socials on active hiring companies still missing them."""
     sb = SupabaseREST()
     try:
-        comps = sb.select_all("companies", select="domain,name,socials,open_jobs_count", filters={"open_jobs_count": "gt.0"})
+        comps = sb.select_all("companies", select="domain,name,website,socials,open_jobs_count", filters={"open_jobs_count": "gt.0"})
         existing_f = sb.select_all("founders", select="company_domain")
         has_founders = {r["company_domain"] for r in existing_f}
 
@@ -47,7 +47,7 @@ async def backfill_missing_richness() -> None:
             d = c["domain"]
             socs = clean_socials(list(c.get("socials") or []) + wd_socs.get(d, []) + site_socs.get(d, []))
             if socs != list(c.get("socials") or []):
-                comp_updates.append({"domain": d, "name": c["name"], "website": f"https://{d}", "socials": socs, "updated_at": now})
+                comp_updates.append({"domain": d, "name": c["name"], "website": c.get("website") or f"https://{d}", "socials": socs, "updated_at": now})
             merged_f[d].extend(wd_fnds.get(d, []))
             merged_f[d].extend(site_fnds.get(d, []))
 

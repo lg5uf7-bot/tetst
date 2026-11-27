@@ -41,8 +41,9 @@ async def main_async() -> None:
                 if b.get("poll_tier") != "dead" and (not b.get("next_poll_at") or b["next_poll_at"] <= now_iso)
             ]
 
-        comps = sb.select_all("companies", select="domain,name")
+        comps = sb.select_all("companies", select="domain,name,website")
         comp_names = {c["domain"]: c["name"] for c in comps}
+        comp_websites = {c["domain"]: c.get("website") or f"https://{c['domain']}" for c in comps}
 
         existing_jobs = sb.select_all("jobs", select="id,company_domain,status,content_hash,salary_min,salary_max")
         jobs_by_id = {j["id"]: j for j in existing_jobs}
@@ -157,15 +158,15 @@ async def main_async() -> None:
             })
 
         print(f"[3/5] Applying deltas -> opened={opened_cnt}, reopened={reopened_cnt}, updated={updated_cnt}, closed={closed_cnt}, unchanged_skipped={unchanged_cnt}")
-        sb.upsert_batch("jobs", upsert_jobs, on_conflict="id", batch_size=250)
+        sb.upsert_batch("jobs", upsert_jobs, on_conflict="id", batch_size=100)
         sb.upsert_batch("ats_boards", board_updates, on_conflict="domain")
         sb.insert_batch("job_events", events, batch_size=300)
 
-        for i in range(0, len(touch_ids), 200):
-            chunk = ",".join(touch_ids[i:i + 200])
+        for i in range(0, len(touch_ids), 40):
+            chunk = ",".join(touch_ids[i:i + 40])
             sb.patch("jobs", {"id": f"in.({chunk})"}, {"last_seen_at": now_iso})
-        for i in range(0, len(close_ids), 200):
-            chunk = ",".join(close_ids[i:i + 200])
+        for i in range(0, len(close_ids), 40):
+            chunk = ",".join(close_ids[i:i + 40])
             sb.patch("jobs", {"id": f"in.({chunk})"}, {"status": "closed", "closed_at": now_iso, "updated_at": now_iso})
 
         print("[4/5] Recomputing company Data Gold aggregates (open_jobs_count, tech_stack, median_salary_usd, velocity_7d)...")
@@ -198,7 +199,7 @@ async def main_async() -> None:
             comp_aggs.append({
                 "domain": dom,
                 "name": cname,
-                "website": f"https://{dom}",
+                "website": comp_websites.get(dom, f"https://{dom}"),
                 "is_hiring": n > 0,
                 "open_jobs_count": n,
                 "hiring_velocity_7d": vel_7d.get(dom, 0),

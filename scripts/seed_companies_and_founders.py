@@ -127,10 +127,14 @@ async def main_async() -> None:
                 "updated_at": now,
             })
 
-        founder_rows = dedupe_founders(founders_by_dom)
+        founder_rows = [r for r in dedupe_founders(founders_by_dom) if r["company_domain"] in canon]
 
-        # Dedupe company_sources PK (company_domain, source, source_id)
-        src_map = {(r["company_domain"], r["source"], r["source_id"]): r for r in source_links}
+        # Dedupe company_sources PK (company_domain, source, source_id) & enforce FK safety
+        src_map = {
+            (r["company_domain"], r["source"], r["source_id"]): r
+            for r in source_links
+            if r["company_domain"] in canon
+        }
         deduped_sources = list(src_map.values())
 
         print(f"[5/5] Upserting {len(comp_rows)} companies, {len(deduped_sources)} sources, {len(founder_rows)} founders to Supabase...")

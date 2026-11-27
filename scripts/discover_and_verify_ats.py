@@ -104,7 +104,7 @@ async def main_async() -> None:
     run_id = sb.start_run("02_discover_and_verify_ats")
     try:
         print("[1/5] Loading existing companies & verified boards from Supabase...")
-        comps = sb.select_all("companies", select="domain,name,description,is_hiring,liveness_status,team_size,socials,sources")
+        comps = sb.select_all("companies", select="domain,name,website,description,is_hiring,liveness_status,team_size,socials,sources")
         existing_boards = sb.select_all("ats_boards", select="domain,ats_provider,ats_slug")
         boarded_doms = {b["domain"] for b in existing_boards}
         taken_boards = {(b["ats_provider"], b["ats_slug"].lower()) for b in existing_boards}
@@ -228,7 +228,7 @@ async def main_async() -> None:
             patch_row = {
                 "domain": dom,
                 "name": c["name"],
-                "website": f"https://{dom}",
+                "website": c.get("website") or f"https://{dom}",
                 "liveness_status": res["liveness_status"],
                 "liveness_checked_at": now,
                 "socials": merged_socs,
@@ -253,7 +253,8 @@ async def main_async() -> None:
                 v["socials"] = clean_socials(wd_socs.get(d, []) + site_socs.get(d, []))
                 merged_f[d].extend(wd_fnds.get(d, []))
                 merged_f[d].extend(site_fnds.get(d, []))
-            founder_rows = dedupe_founders(merged_f)
+            valid_doms = set(comp_by_dom) | set(new_companies)
+            founder_rows = [r for r in dedupe_founders(merged_f) if r["company_domain"] in valid_doms]
 
         print(f"[5/5] Upserting {len(new_companies)} new companies, {len(company_patches)} liveness updates, {len(verified_boards)} verified boards...")
         sb.upsert_batch("companies", list(new_companies.values()), on_conflict="domain")
