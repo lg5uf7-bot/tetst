@@ -1,0 +1,40 @@
+name: 02 Daily Job Sync & Velocity Delta
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      sync_mode:
+        description: "due = tiered schedule (fast), all = force poll all active boards"
+        required: true
+        default: "due"
+        type: choice
+        options:
+          - due
+          - all
+
+jobs:
+  daily-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYNC_MODE: ${{ inputs.sync_mode || 'due' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily ATS sync & Data Gold aggregation
+        run: python scripts/sync_jobs.py
