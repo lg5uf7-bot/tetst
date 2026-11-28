@@ -59,37 +59,48 @@ class SupabaseREST:
     ) -> int:
         if not rows:
             return 0
+        # PostgREST PGRST102 requires identical keys in every object of a JSON batch.
+        grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+        for row in rows:
+            grouped.setdefault(tuple(sorted(row.keys())), []).append(row)
+
         total = 0
         headers = {**self.headers, "Prefer": "resolution=merge-duplicates,return=minimal"}
-        for i in range(0, len(rows), batch_size):
-            chunk = rows[i : i + batch_size]
-            for attempt in range(3):
-                r = self.client.post(
-                    f"{self.rest_url}/{table}",
-                    params={"on_conflict": on_conflict},
-                    headers=headers,
-                    json=chunk,
-                )
-                if r.status_code < 400:
-                    break
-                if r.status_code >= 500 and attempt < 2:
-                    time.sleep(1.5 * (attempt + 1))
-                    continue
-                raise RuntimeError(f"Upsert {table} failed ({r.status_code}): {r.text[:600]}")
-            total += len(chunk)
+        for group_rows in grouped.values():
+            for i in range(0, len(group_rows), batch_size):
+                chunk = group_rows[i : i + batch_size]
+                for attempt in range(3):
+                    r = self.client.post(
+                        f"{self.rest_url}/{table}",
+                        params={"on_conflict": on_conflict},
+                        headers=headers,
+                        json=chunk,
+                    )
+                    if r.status_code < 400:
+                        break
+                    if r.status_code >= 500 and attempt < 2:
+                        time.sleep(1.5 * (attempt + 1))
+                        continue
+                    raise RuntimeError(f"Upsert {table} failed ({r.status_code}): {r.text[:600]}")
+                total += len(chunk)
         return total
 
     def insert_batch(self, table: str, rows: list[dict[str, Any]], batch_size: int = 400) -> int:
         if not rows:
             return 0
+        grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+        for row in rows:
+            grouped.setdefault(tuple(sorted(row.keys())), []).append(row)
+
         total = 0
         headers = {**self.headers, "Prefer": "return=minimal"}
-        for i in range(0, len(rows), batch_size):
-            chunk = rows[i : i + batch_size]
-            r = self.client.post(f"{self.rest_url}/{table}", headers=headers, json=chunk)
-            if r.status_code >= 400:
-                raise RuntimeError(f"Insert {table} failed ({r.status_code}): {r.text[:600]}")
-            total += len(chunk)
+        for group_rows in grouped.values():
+            for i in range(0, len(group_rows), batch_size):
+                chunk = group_rows[i : i + batch_size]
+                r = self.client.post(f"{self.rest_url}/{table}", headers=headers, json=chunk)
+                if r.status_code >= 400:
+                    raise RuntimeError(f"Insert {table} failed ({r.status_code}): {r.text[:600]}")
+                total += len(chunk)
         return total
 
     def patch(self, table: str, filters: dict[str, str], payload: dict[str, Any]) -> None:

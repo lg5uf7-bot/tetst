@@ -33,7 +33,7 @@ from src.validators import (
 
 async def crawl_company_sites(companies: list[dict], max_sites: int = 2500) -> dict[str, dict]:
     """Crawl /, /careers, /jobs on prioritized unboarded startups for ATS candidates + liveness + socials."""
-    sem = asyncio.Semaphore(35)
+    sem = asyncio.Semaphore(60)
     results: dict[str, dict] = {}
     targets = companies[:max_sites]
 
@@ -41,7 +41,7 @@ async def crawl_company_sites(companies: list[dict], max_sites: int = 2500) -> d
         headers={"User-Agent": "Mozilla/5.0 (compatible; StartupIntelBot/2.0)"},
         follow_redirects=True,
         max_redirects=3,
-        timeout=httpx.Timeout(10.0, connect=4.5),
+        timeout=httpx.Timeout(8.0, connect=4.0),
     ) as ac:
         async def one(c: dict):
             dom = c["domain"]
@@ -50,7 +50,7 @@ async def crawl_company_sites(companies: list[dict], max_sites: int = 2500) -> d
                 cands: list[tuple[str, str]] = []
                 socs: list[str] = []
                 meta_desc = ""
-                for path in ["", "/careers", "/jobs", "/about"]:
+                for path in ["", "/careers", "/jobs"]:
                     try:
                         r = await ac.get(f"https://{dom}{path}")
                         if r.status_code in (403, 429):
@@ -130,6 +130,14 @@ async def main_async() -> None:
                 k = (prov, slug.lower())
                 if k not in taken_boards and k not in cand_map:
                     cand_map[k] = {"dom": dom, "prov": prov, "slug": slug, "channel": "site_crawl", "site_linked": True}
+            # Smart slug_guess for alive hiring startups with JS-rendered /careers pages
+            if not res["cands"] and res["liveness_status"] in ("alive", "alive_waf") and comp_by_dom.get(dom, {}).get("is_hiring"):
+                dom_base = dom.split(".")[0].lower()
+                if len(dom_base) >= 3:
+                    for prov in ("ashby", "greenhouse", "lever"):
+                        k = (prov, dom_base)
+                        if k not in taken_boards and k not in cand_map:
+                            cand_map[k] = {"dom": dom, "prov": prov, "slug": dom_base, "channel": "slug_guess", "site_linked": False}
 
         for h in hn_rows:
             k = (h["ats_provider"], h["ats_slug"].lower())
@@ -142,7 +150,7 @@ async def main_async() -> None:
                 cand_map[k] = {"dom": "", "prov": prov, "slug": slug, "channel": "common_crawl", "site_linked": False}
 
         print(f"[3/5] Probing {len(cand_map)} candidate ATS boards for strict 1-to-1 ownership...")
-        probe_sem = asyncio.Semaphore(35)
+        probe_sem = asyncio.Semaphore(50)
         verified_boards: list[dict] = []
         new_companies: dict[str, dict] = {}
         new_sources: list[dict] = []
@@ -225,18 +233,16 @@ async def main_async() -> None:
             if not c:
                 continue
             merged_socs = clean_socials(list(c.get("socials") or []) + res["socials"])
-            patch_row = {
+            company_patches.append({
                 "domain": dom,
                 "name": c["name"],
                 "website": c.get("website") or f"https://{dom}",
+                "description": c.get("description") or res["meta_desc"] or "",
                 "liveness_status": res["liveness_status"],
                 "liveness_checked_at": now,
                 "socials": merged_socs,
                 "updated_at": now,
-            }
-            if not c.get("description") and res["meta_desc"]:
-                patch_row["description"] = res["meta_desc"]
-            company_patches.append(patch_row)
+            })
 
         founder_rows = []
         if new_companies:
@@ -246,7 +252,7 @@ async def main_async() -> None:
                 new_doms,
                 {d: v["name"] for d, v in new_companies.items()},
                 use_jina_fallback=True,
-                jina_limit=30,
+                jina_limit=15,
             )
             merged_f: dict[str, list[dict]] = defaultdict(list)
             for d, v in new_companies.items():

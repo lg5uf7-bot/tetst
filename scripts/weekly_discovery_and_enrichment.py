@@ -30,7 +30,7 @@ async def backfill_missing_richness() -> None:
 
         missing = [c for c in comps if c["domain"] not in has_founders or not c.get("socials")]
         missing.sort(key=lambda c: c.get("open_jobs_count", 0), reverse=True)
-        batch = missing[:250]
+        batch = missing[:100]
         if not batch:
             print("[backfill] All active hiring companies already have founders + socials!")
             return
@@ -38,7 +38,7 @@ async def backfill_missing_richness() -> None:
         doms = [c["domain"] for c in batch]
         name_map = {c["domain"]: c["name"] for c in batch}
         wd_socs, wd_fnds = await fetch_wikidata_batch(doms)
-        site_socs, site_fnds = await enrich_websites_founders_and_socials(doms, name_map, use_jina_fallback=True, jina_limit=40)
+        site_socs, site_fnds = await enrich_websites_founders_and_socials(doms, name_map, use_jina_fallback=True, jina_limit=15)
 
         now = utc_now_iso()
         comp_updates = []

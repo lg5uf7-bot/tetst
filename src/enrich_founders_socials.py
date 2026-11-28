@@ -157,7 +157,7 @@ async def enrich_websites_founders_and_socials(
     domains: list[str],
     company_names: dict[str, str],
     use_jina_fallback: bool = True,
-    jina_limit: int = 40,
+    jina_limit: int = 15,
 ) -> tuple[dict[str, list[str]], dict[str, list[dict]]]:
     """Tier 2 direct website JSON-LD + /about,/team + Tier 3 r.jina.ai fallback."""
     sem = asyncio.Semaphore(25)
@@ -228,13 +228,13 @@ async def enrich_websites_founders_and_socials(
         await asyncio.gather(*(one(d) for d in domains))
 
         if use_jina_fallback and jina_queue:
-            jsem = asyncio.Semaphore(5)
+            jsem = asyncio.Semaphore(8)
             async def one_jina(dom: str):
                 cname = company_names.get(dom, "")
                 async with jsem:
                     for path in ["/about", "/team", ""]:
                         try:
-                            rj = await ac.get(f"https://r.jina.ai/https://{dom}{path}", timeout=15)
+                            rj = await ac.get(f"https://r.jina.ai/https://{dom}{path}", timeout=10)
                             if rj.status_code != 200:
                                 continue
                             socs = clean_socials([m.group(1) for m in SOC_RE.finditer(rj.text)])
