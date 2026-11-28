@@ -1,0 +1,51 @@
+name: 01 Initial Gold Seed (Clean Slate v2)
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "Run all_in_one or individual step (1 -> 2 -> 3)"
+        required: true
+        default: "all_in_one"
+        type: choice
+        options:
+          - all_in_one
+          - 1_seed_companies_and_founders
+          - 2_discover_and_verify_ats
+          - 3_sync_jobs_all
+
+jobs:
+  seed-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      MAX_CRAWL_SITES: "6500"
+      CC_LIMIT: "300"
+      SYNC_MODE: "all"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Step 1 — Seed direct companies, provenance, founders & socials
+        if: ${{ inputs.step == 'all_in_one' || inputs.step == '1_seed_companies_and_founders' }}
+        run: python scripts/seed_companies_and_founders.py
+
+      - name: Step 2 — Discover & verify 1-to-1 ATS boards (Careers + HN + Common Crawl)
+        if: ${{ inputs.step == 'all_in_one' || inputs.step == '2_discover_and_verify_ats' }}
+        run: python scripts/discover_and_verify_ats.py
+
+      - name: Step 3 — Poll all verified ATS boards, store full descriptions & Data Gold
+        if: ${{ inputs.step == 'all_in_one' || inputs.step == '3_sync_jobs_all' }}
+        run: python scripts/sync_jobs.py

@@ -1,0 +1,32 @@
+name: 03 Weekly Discovery & Founder Enrichment
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  weekly-discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      MAX_CRAWL_SITES: "2500"
+      CC_LIMIT: "350"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run weekly startup discovery, ATS verification & founder backfill
+        run: python scripts/weekly_discovery_and_enrichment.py
